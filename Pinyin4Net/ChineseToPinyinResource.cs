@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text;
 using System.IO;
+using System.Linq;
 
 namespace hyjiacan.util.p4n
 {
@@ -16,14 +18,14 @@ namespace hyjiacan.util.p4n
         /**
          * A hash table contains <Unicode, HanyuPinyin> pairs
          */
-        private Dictionary<string, string> unicodeToHanyuPinyinTable;
+        private ConcurrentDictionary<string, string> unicodeToHanyuPinyinTable;
 
         /**
          * @param unicodeToHanyuPinyinTable
          *            The unicodeToHanyuPinyinTable to set.
          */
         private void setUnicodeToHanyuPinyinTable(
-                Dictionary<string, string> unicodeToHanyuPinyinTable)
+                ConcurrentDictionary<string, string> unicodeToHanyuPinyinTable)
         {
             this.unicodeToHanyuPinyinTable = unicodeToHanyuPinyinTable;
         }
@@ -31,7 +33,7 @@ namespace hyjiacan.util.p4n
         /**
          * @return Returns the unicodeToHanyuPinyinTable.
          */
-        private Dictionary<string, string> getUnicodeToHanyuPinyinTable()
+        private ConcurrentDictionary<string, string> getUnicodeToHanyuPinyinTable()
         {
             return unicodeToHanyuPinyinTable;
         }
@@ -51,26 +53,13 @@ namespace hyjiacan.util.p4n
         {
             try
             {
-                String resourceName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "pinyindb/unicode_to_hanyu_pinyin.txt");
+                var resourceName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "pinyindb/unicode_to_hanyu_pinyin.txt");
 
-                unicodeToHanyuPinyinTable = new Dictionary<string, string>();
-                string line = string.Empty;
-                string[] lineRes = null;
-                using (StreamReader reader = new StreamReader(resourceName))
-                {
-                    while (!reader.EndOfStream)
-                    {
-                        line = reader.ReadLine();
-                        if (string.IsNullOrEmpty(line))
-                        {
-                            continue;
-                        }
-                        line = line.Trim();
-                        lineRes = line.Split(' ');
-                        unicodeToHanyuPinyinTable.Add(lineRes[0], lineRes[1]);
-                    }
-                }
-
+                var table = File.ReadLines(resourceName)
+                                .AsParallel()
+                                .Select(l => l.Split(' '))
+                                .ToDictionary(l => l[0], l => l[1]);
+                unicodeToHanyuPinyinTable = new ConcurrentDictionary<string, string>(table);
             }
             catch (FileNotFoundException ex)
             {
@@ -145,7 +134,7 @@ namespace hyjiacan.util.p4n
             String codepointHexStr = codePointOfChar.ToString("x").ToUpper();
 
             // fetch from hashtable
-            Dictionary<string, string> dic = getUnicodeToHanyuPinyinTable();
+            ConcurrentDictionary<string, string> dic = getUnicodeToHanyuPinyinTable();
             if (dic.ContainsKey(codepointHexStr))
             {
                 String foundRecord = dic[codepointHexStr];
